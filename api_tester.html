@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Tester — Mini Postman</title>
+  <style>
+    :root { font-family: Inter, system-ui, Arial, sans-serif; color: #e8edf5; background: #111827; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 16px; }
+    .app { max-width: 1100px; margin: auto; }
+    header { margin-bottom: 22px; }
+    h1 { font-size: 25px; margin: 0 0 6px; }
+    .sub { color: #9ca9bb; font-size: 14px; }
+    .panel { background: #1b2637; border: 1px solid #344258; border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+    .request-line { display: grid; grid-template-columns: 130px 1fr auto; gap: 10px; }
+    input, select, textarea, button { font: inherit; border-radius: 7px; }
+    input, select, textarea { width: 100%; color: #e8edf5; background: #111a28; border: 1px solid #40516b; padding: 11px 12px; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: #60a5fa; }
+    button { border: 0; padding: 11px 20px; font-weight: 700; cursor: pointer; }
+    .send { color: #071521; background: #60a5fa; min-width: 105px; }
+    .send:disabled { opacity: .6; cursor: wait; }
+    .tabs { display: flex; gap: 8px; margin: 17px 0 12px; border-bottom: 1px solid #344258; }
+    .tab { color: #aab6c8; background: transparent; padding: 9px 13px; border-radius: 7px 7px 0 0; }
+    .tab.active { color: #fff; background: #2b3b52; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    textarea { min-height: 155px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+    .hint { color: #9ca9bb; font-size: 12px; margin: 8px 0 0; }
+    .response-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .response-head h2 { margin: 0 auto 0 0; font-size: 17px; }
+    .meta { color: #aab6c8; font-size: 13px; }
+    .status { border-radius: 20px; padding: 5px 10px; background: #253b32; color: #86efac; font-size: 12px; font-weight: 700; }
+    .status.bad { background: #482a32; color: #fda4af; }
+    pre { margin: 0; padding: 16px; min-height: 190px; max-height: 440px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e3f4; background: #101824; border: 1px solid #344258; border-radius: 8px; font: 13px/1.55 ui-monospace, Consolas, monospace; }
+    .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .secondary { color: #d7e3f4; background: #344258; }
+    .section-label { display: block; color: #b7c3d4; font-size: 13px; margin: 3px 0 8px; }
+    @media (max-width: 650px) { .request-line { grid-template-columns: 1fr; } .send { width: 100%; } body { padding: 18px 10px; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>API Tester</h1>
+      <div class="sub">Uma ferramenta simples para testar requisições HTTP, inspirada no Postman.</div>
+    </header>
+
+    <section class="panel">
+      <div class="request-line">
+        <select id="method" aria-label="Método HTTP">
+          <option>GET</option><option>POST</option><option>PUT</option>
+          <option>PATCH</option><option>DELETE</option>
+        </select>
+        <input id="url" type="url" value="http://localhost:5000/alunos" placeholder="http://localhost:5000/alunos">
+        <button class="send" id="send">Enviar</button>
+      </div>
+
+      <nav class="tabs" aria-label="Configurações da requisição">
+        <button class="tab active" data-tab="headers">Headers</button>
+        <button class="tab" data-tab="body">Body</button>
+      </nav>
+
+      <div class="tab-content active" id="headers">
+        <label class="section-label" for="headersInput">Cabeçalhos HTTP (formato JSON)</label>
+        <textarea id="headersInput" spellcheck="false">{
+  "Content-Type": "application/json"
+}</textarea>
+        <p class="hint">Exemplo: Authorization, Content-Type. Para uma API Flask local, normalmente Content-Type é suficiente.</p>
+      </div>
+
+      <div class="tab-content" id="body">
+        <label class="section-label" for="bodyInput">Corpo da requisição (JSON)</label>
+        <textarea id="bodyInput" spellcheck="false">{
+  "aluno": "Ana",
+  "curso": "Ciência de Dados"
+}</textarea>
+        <p class="hint">O Body é enviado em requisições POST, PUT e PATCH. GET e DELETE não enviam corpo nesta ferramenta.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="response-head">
+        <h2>Resposta</h2>
+        <span class="status" id="status">Aguardando requisição</span>
+        <span class="meta" id="time">—</span>
+        <span class="meta" id="size">—</span>
+      </div>
+      <pre id="response">A resposta da API aparecerá aqui.</pre>
+      <div class="actions">
+        <button class="secondary" id="copy" type="button">Copiar resposta</button>
+        <button class="secondary" id="clear" type="button">Limpar</button>
+      </div>
+    </section>
+    <p class="hint">Observação: esta página precisa conseguir acessar a API pela rede. Se o navegador bloquear a chamada por CORS, habilite CORS no Flask ou sirva esta página pela própria aplicação Flask.</p>
+  </main>
+
+  <script>
+    const methodEl = document.getElementById('method');
+    const urlEl = document.getElementById('url');
+    const sendBtn = document.getElementById('send');
+    const headersEl = document.getElementById('headersInput');
+    const bodyEl = document.getElementById('bodyInput');
+    const responseEl = document.getElementById('response');
+    const statusEl = document.getElementById('status');
+    const timeEl = document.getElementById('time');
+    const sizeEl = document.getElementById('size');
+
+    // Alterna entre as abas Headers e Body.
+    document.querySelectorAll('.tab').forEach(button => {
+      button.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        button.classList.add('active');
+        document.getElementById(button.dataset.tab).classList.add('active');
+      });
+    });
+
+    sendBtn.addEventListener('click', enviarRequisicao);
+
+    async function enviarRequisicao() {
+      const method = methodEl.value;
+      const url = urlEl.value.trim();
+
+      if (!url) {
+        mostrarErro('Informe a URL da API.');
+        return;
+      }
+
+      let headers;
+      try {
+        headers = JSON.parse(headersEl.value || '{}');
+        if (!headers || Array.isArray(headers) || typeof headers !== 'object') {
+          throw new Error('Os headers precisam ser um objeto JSON.');
+        }
+      } catch (error) {
+        mostrarErro('Headers inválidos: ' + error.message);
+        return;
+      }
+
+      const options = { method, headers };
+
+      if (['POST', 'PUT', 'PATCH'].includes(method)) {
+        try {
+          const bodyText = bodyEl.value.trim();
+          if (bodyText) {
+            JSON.parse(bodyText); // Valida o JSON antes do envio.
+            options.body = bodyText;
+          }
+        } catch (error) {
+          mostrarErro('Body não é um JSON válido: ' + error.message);
+          return;
+        }
+      }
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Enviando...';
+      statusEl.textContent = 'Enviando';
+      statusEl.classList.remove('bad');
+      responseEl.textContent = 'Aguardando resposta...';
+      timeEl.textContent = '—';
+      sizeEl.textContent = '—';
+
+      const inicio = performance.now();
+
+      try {
+        const response = await fetch(url, options);
+        const texto = await response.text();
+        const duracao = Math.round(performance.now() - inicio);
+
+        let conteudo;
+        try {
+          conteudo = JSON.stringify(JSON.parse(texto), null, 2);
+        } catch {
+          conteudo = texto || '(A resposta não possui conteúdo.)';
+        }
+
+        responseEl.textContent = conteudo;
+        statusEl.textContent = `${response.status} ${response.statusText}`;
+        statusEl.classList.toggle('bad', !response.ok);
+        timeEl.textContent = `${duracao} ms`;
+        sizeEl.textContent = `${new Blob([texto]).size} bytes`;
+      } catch (error) {
+        mostrarErro(
+          'Não foi possível completar a requisição.\n' +
+          error.message +
+          '\n\nVerifique a URL, se a API está em execução e se o CORS está configurado.'
+        );
+        timeEl.textContent = `${Math.round(performance.now() - inicio)} ms`;
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar';
+      }
+    }
+
+    function mostrarErro(mensagem) {
+      responseEl.textContent = mensagem;
+      statusEl.textContent = 'Erro';
+      statusEl.classList.add('bad');
+    }
+
+    document.getElementById('clear').addEventListener('click', () => {
+      responseEl.textContent = 'A resposta da API aparecerá aqui.';
+      statusEl.textContent = 'Aguardando requisição';
+      statusEl.classList.remove('bad');
+      timeEl.textContent = '—';
+      sizeEl.textContent = '—';
+    });
+
+    document.getElementById('copy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(responseEl.textContent);
+        document.getElementById('copy').textContent = 'Copiado!';
+        setTimeout(() => document.getElementById('copy').textContent = 'Copiar resposta', 1300);
+      } catch {
+        mostrarErro('Não foi possível copiar automaticamente. Selecione e copie o texto da resposta.');
+      }
+    });
+  </script>
+</body>
+</html>
